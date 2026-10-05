@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Helmet light</title>
+<style>
+:root{--bg:#0f1216;--card:#181c22;--line:#2a3039;--text:#e9ecef;--dim:#8b95a1;--red:#ff453a;--amber:#ff9f0a;--blue:#3d8bfd;--green:#32d74b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:16px 16px 48px}
+header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+h1{font-size:20px;margin:0}
+.chip{font-size:12px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--dim)}
+.chip.ok{color:var(--green)}.chip.warn{color:var(--amber)}.chip.bad{color:var(--red)}
+section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:14px}
+fieldset{border:0;margin:0;padding:0;min-width:0}
+fieldset:disabled section{opacity:.45}
+h2{margin:0 0 10px;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.live{display:flex;align-items:center;gap:14px}
+.lamp{flex:none;width:58px;height:58px;border-radius:12px;background:#2a1517;border:1px solid var(--line);transition:background .05s,box-shadow .05s}
+.lamp.on{background:var(--red);box-shadow:0 0 22px var(--red)}
+.state{font-size:22px;font-weight:600}
+.num{color:var(--dim);font-variant-numeric:tabular-nums}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.row+.row,.live+.row{margin-top:10px}
+button,select,input{font:inherit;color:var(--text)}
+button{flex:1 1 90px;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:#232933;cursor:pointer}
+button:active{transform:translateY(1px)}
+button:disabled{opacity:.45;cursor:default}
+fieldset:disabled button:disabled{opacity:1}
+button.sel{border-color:var(--amber);color:var(--amber);background:#2b2416}
+button.sel.red{border-color:var(--red);color:var(--red);background:#2b1719}
+button.primary{background:var(--blue);border-color:var(--blue);color:#fff}
+#connect{font-size:17px;padding:14px}
+.bar{height:8px;border-radius:4px;background:#232933;overflow:hidden;margin-top:10px}
+.bar div{height:100%;width:0;background:var(--blue);transition:width .2s}
+.note{font-size:13px;color:var(--dim);margin:8px 0 0}
+.grid{display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center}
+.grid label{font-size:14px}
+.grid input[type=number],.grid select{width:110px;padding:7px 8px;border-radius:8px;border:1px solid var(--line);background:#0f1216;text-align:right}
+.grid input[type=checkbox]{width:20px;height:20px;justify-self:end}
+.unit{color:var(--dim);font-size:12px}
+.ride{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.ride:first-child{border-top:0}
+.ride b{font-weight:600}
+.ride span{color:var(--dim);text-align:right;font-variant-numeric:tabular-nums}
+.totals{font-size:15px;margin-top:10px}
+details{margin-top:12px}
+summary{cursor:pointer;color:var(--dim);font-size:13px}
+.field{display:block;margin-top:10px;font-size:13px;color:var(--dim)}
+.field input{display:block;width:100%;margin-top:4px;padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:#0f1216}
+#toast{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:#2c333d;border:1px solid var(--line);padding:9px 14px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90vw}
+#toast.show{opacity:1}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Helmet light</h1>
+    <span class="chip" id="c-conn">not connected</span>
+  </header>
+
+  <section>
+    <div class="row"><button id="connect" class="primary">Connect to the helmet</button></div>
+    <p class="note" id="help">Switch the helmet light on, keep it within a few metres, then tap Connect and choose
+      <b>HelmetLight</b>.</p>
+  </section>
+
+  <fieldset id="controls" disabled>
+    <section>
+      <h2>Now</h2>
+      <div class="live">
+        <div class="lamp" id="lamp"></div>
+        <div>
+          <div class="state" id="state">–</div>
+          <div class="num" id="nums">–</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Lights</h2>
+      <div class="state" id="ind">–</div>
+      <div class="row" style="margin-top:10px">
+        <button data-turn="left">◀ Left</button>
+        <button data-turn="hazard">Hazard</button>
+        <button data-turn="right">Right ▶</button>
+        <button data-turn="off">Automatic</button>
+      </div>
+      <div class="row">
+        <button id="b-gentle" class="red">Test gentle brake</button>
+        <button id="b-hard" class="red">Test hard brake</button>
+        <button id="b-self">Self-test</button>
+        <button id="b-orient">Corner test</button>
+      </div>
+      <p class="note">Left, Right and Hazard hold a signal by hand. Automatic shows an arrow only while the vehicle is
+        really cornering: pushed sideways and turning. Tilting your head does nothing.</p>
+    </section>
+  </fieldset>
+
+  <section>
+    <h2>Rides</h2>
+    <div id="rides"><p class="note" style="margin:0">Connect to see the rides stored on the helmet.</p></div>
+    <div class="row" style="margin-top:12px">
+      <button id="sync" class="primary" disabled>Sync to GitHub</button>
+      <button id="history">Show cloud history</button>
+    </div>
+    <p class="note" id="sync-note">A ride starts when you pick the helmet up and ends after it has lain still for two
+      minutes. Sync copies finished rides to your GitHub repository.</p>
+    <div class="totals" id="totals"></div>
+    <details id="setup">
+      <summary>Cloud setup</summary>
+      <label class="field">GitHub repository (owner/name)
+        <input id="gh-repo" placeholder="joelvarun/helmet-rides" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+      <label class="field">Access token (kept only on this phone)
+        <input id="gh-token" type="password" placeholder="github_pat_…" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+      <div class="row" style="margin-top:10px">
+        <button id="gh-save">Save on this phone</button>
+        <button id="gh-forget">Forget token</button>
+      </div>
+      <p class="note">Create the token on github.com → Settings → Developer settings → Fine-grained tokens, limited to
+        this one repository, with <b>Contents: Read and write</b>.</p>
+    </details>
+  </section>
+
+  <fieldset id="controls2" disabled>
+    <section>
+      <h2>Record a ride in detail</h2>
+      <div class="row">
+        <select id="r-secs" style="flex:1 1 90px;padding:10px;border-radius:10px;border:1px solid var(--line);background:#232933">
+          <option value="30">30 s</option><option value="60">60 s</option><option value="120" selected>120 s</option>
+        </select>
+        <button id="r-start" class="primary">Start recording</button>
+      </div>
+      <div class="bar"><div id="r-bar"></div></div>
+      <p class="note" id="r-note">–</p>
+    </section>
+
+    <section>
+      <h2>Tuning</h2>
+      <div class="grid" id="form"></div>
+      <div class="row" style="margin-top:12px"><button id="s-save" class="primary">Save settings</button></div>
+      <p class="note">Too sensitive? Raise "Brake light comes on at". Not sensitive enough? Lower it.</p>
+    </section>
+  </fieldset>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const UUID = n => `7f1e000${n}-5c0a-4b9e-9a6d-3a1f2c4d5e6f`;
+const SERVICE = UUID(0);
+const TURN = ['off', 'left', 'right', 'hazard'];
+const enc = new TextEncoder(), dec = new TextDecoder();
+let device = null, chStatus = null, chCmd = null, chSet = null, chRides = null;
+let cfg = null, last = null, helmet = null;  // helmet: { serial, rides } as last read
+
+const FIELDS = [
+  ['brake_on_mg', 'Brake light comes on at (slow blinking)', 'mg'],
+  ['brake_hard_mg', 'Fastest blinking from', 'mg'],
+  ['brake_off_mg', 'Brake light goes off below', 'mg'],
+  ['brake_hold_ms', 'Braking must last at least', 'ms'],
+  ['brake_min_on_ms', 'Keep brake light on at least', 'ms'],
+  ['turn_on_mg', 'Sideways cornering force that starts the turn arrow', 'mg'],
+  ['rot_gate_dps', 'Ignore braking while head turns faster than (0 = never ignore)', '°/s'],
+  ['led_current_ma', 'LED current limit', 'mA'],
+  ['tail_level', 'Tail light when not braking (0 = off)', '0–255'],
+];
+const CHECKS = [['auto_turn', 'Turn arrows by themselves when the vehicle corners'], ['mirror', 'Mirror matrix left–right']];
+
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+function setConn(text, cls) {
+  $('c-conn').textContent = text;
+  $('c-conn').className = 'chip ' + (cls || '');
+  const up = cls === 'ok';
+  $('controls').disabled = $('controls2').disabled = !up;
+  $('sync').disabled = !up;
+  $('connect').textContent = up ? 'Disconnect' : 'Connect to the helmet';
+}
+
+// <cloud> Ride history in a GitHub repository: one file, rides.json. Kept free
+// of page details so it can be tested on its own.
+const GITHUB_API = 'https://api.github.com';
+const DATA_FILE = 'rides.json';
+
+function githubFile(repo, token, method, body) {
+  return fetch(`${GITHUB_API}/repos/${repo}/contents/${DATA_FILE}`, {
+    method,
+    cache: 'no-store',
+    headers: { Authorization: 'Bearer ' + token, Accept: 'application/vnd.github+json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+async function githubError(r) {
+  let msg = '';
+  try { msg = (await r.json()).message || ''; } catch (e) {}
+  if (r.status === 401) return 'GitHub did not accept the token';
+  if (r.status === 403) return 'the token is not allowed to do that (it needs Contents: Read and write)';
+  if (r.status === 404) return 'repository not found (check its name, and that the token covers it)';
+  return `GitHub answered ${r.status} ${msg}`;
+}
+
+// Returns { rides, sha }; sha is null when the file doesn't exist yet.
+async function cloudLoad(repo, token) {
+  const r = await githubFile(repo, token, 'GET');
+  if (r.status === 404) return { rides: [], sha: null };
+  if (!r.ok) throw new Error(await githubError(r));
+  const file = await r.json();
+  const text = atob(file.content.replace(/\s/g, ''));
+  return { rides: text.trim() ? JSON.parse(text) : [], sha: file.sha };
+}
+
+async function cloudSave(repo, token, rides, sha, message) {
+  const body = { message, content: btoa(JSON.stringify(rides, null, 1) + '\n') };
+  if (sha) body.sha = sha;
+  const r = await githubFile(repo, token, 'PUT', body);
+  if (!r.ok) throw new Error(await githubError(r));
+}
+
+// A ride as stored in the cloud. The helmet has no clock: if it never learned
+// the time before the ride ended, the sync time stands in and is marked.
+function cloudRide(r, serial, nowMs) {
+  return {
+    helmet: serial, id: r.id,
+    ended: new Date(r.ended ? r.ended * 1000 : nowMs).toISOString(),
+    time_estimated: !r.ended,
+    duration_s: r.duration_s, brakes: r.brakes, hard_brakes: r.hard_brakes, braking_s: r.braking_s,
+    peak_g: r.peak_g, left_turns: r.left_turns, right_turns: r.right_turns, max_lean_deg: r.max_lean_deg,
+  };
+}
+
+// Adds the rides the cloud doesn't have yet (same helmet and id = same ride).
+function mergeRides(cloud, fresh) {
+  const seen = new Set(cloud.map(r => r.helmet + '/' + r.id));
+  const added = fresh.filter(r => !seen.has(r.helmet + '/' + r.id));
+  const rides = cloud.concat(added).sort((a, b) => (a.ended < b.ended ? -1 : a.ended > b.ended ? 1 : 0));
+  return { rides, added: added.length };
+}
+
+function rideTotals(rides) {
+  const t = { rides: rides.length, seconds: 0, brakes: 0, hard: 0, braking_s: 0, peak_g: 0 };
+  for (const r of rides) {
+    t.seconds += r.duration_s;
+    t.brakes += r.brakes;
+    t.hard += r.hard_brakes;
+    t.braking_s += r.braking_s;
+    t.peak_g = Math.max(t.peak_g, r.peak_g);
+  }
+  return t;
+}
+// </cloud>
+
+// ---- Bluetooth ------------------------------------------------------------
+// A Bluetooth link carries one request at a time, so they are queued.
+let queue = Promise.resolve();
+function gatt(fn) {
+  const run = queue.then(fn);
+  queue = run.catch(() => {});
+  return run;
+}
+
+function write(ch, text) {
+  const data = enc.encode(text);
+  return gatt(() => ch.writeValueWithResponse ? ch.writeValueWithResponse(data) : ch.writeValue(data));
+}
+
+// Commands don't wait for the helmet to acknowledge: the status that comes
+// back ten times a second shows whether they took effect.
+function cmd(text) {
+  const data = enc.encode(text);
+  return gatt(() => chCmd.writeValueWithoutResponse ? chCmd.writeValueWithoutResponse(data) : chCmd.writeValue(data))
+    .catch(e => toast('The helmet did not take that: ' + e.message));
+}
+
+async function readSettings() {
+  cfg = JSON.parse(dec.decode(await gatt(() => chSet.readValue())));
+  fillForm(cfg);
+}
+
+function parseRides(v) {
+  const rides = [];
+  for (let i = 0, o = 10; i < v.getUint8(0); i++, o += 26) {
+    rides.push({
+      id: v.getUint32(o, true), ended: v.getUint32(o + 4, true), duration_s: v.getUint32(o + 8, true),
+      brakes: v.getUint16(o + 12, true), hard_brakes: v.getUint16(o + 14, true),
+      braking_s: v.getUint16(o + 16, true) / 10, peak_g: v.getUint16(o + 18, true) / 1000,
+      left_turns: v.getUint16(o + 20, true), right_turns: v.getUint16(o + 22, true),
+      max_lean_deg: v.getUint8(o + 24), open: !!(v.getUint8(o + 25) & 1),
+    });
+  }
+  return { serial: v.getUint32(2, true).toString(16).padStart(8, '0'), rides };
+}
+
+async function readRides() {
+  helmet = parseRides(await gatt(() => chRides.readValue()));
+  renderRides();
+}
+
+async function openLink() {
+  setConn('connecting…', 'warn');
+  const server = await device.gatt.connect();
+  const service = await server.getPrimaryService(SERVICE);
+  chStatus = await service.getCharacteristic(UUID(1));
+  chCmd = await service.getCharacteristic(UUID(2));
+  chSet = await service.getCharacteristic(UUID(3));
+  chRides = await service.getCharacteristic(UUID(4));
+  // Live status first, so the page comes alive straight away.
+  chStatus.addEventListener('characteristicvaluechanged', e => render(parse(e.target.value)));
+  await gatt(() => chStatus.startNotifications());
+  setConn('connected', 'ok');
+  // The helmet has no clock; give it the phone's so rides get the right date.
+  await cmd('time=' + Math.floor(Date.now() / 1000));
+  await readSettings();
+  await readRides();
+}
+
+async function connect() {
+  if (device && device.gatt.connected) {
+    device.gatt.disconnect();
+    return;
+  }
+  try {
+    device = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [SERVICE] }, { namePrefix: 'HelmetLight' }],
+      optionalServices: [SERVICE],
+    });
+    device.addEventListener('gattserverdisconnected', () => setConn('disconnected', 'bad'));
+    await openLink();
+  } catch (e) {
+    setConn('not connected');
+    if (e.name !== 'NotFoundError') toast('Could not connect: ' + e.message);  // NotFoundError = chooser cancelled
+  }
+}
+
+function parse(v) {
+  const f = v.getUint8(0);
+  return {
+    brake: !!(f & 1), level: !!(f & 2), parked: !!(f & 4), imu: !!(f & 8), orient: !!(f & 16),
+    turn: TURN[v.getUint8(1)], auto: TURN[v.getUint8(2)], rec: v.getUint8(3),
+    decel: v.getInt16(4, true) / 1000, brake_g: v.getInt16(6, true) / 1000,
+    lean: v.getInt16(8, true) / 10, yaw: v.getInt16(10, true) / 10,
+    forced: v.getUint16(12, true), rec_s: v.getUint16(14, true),
+    lat: v.byteLength >= 18 ? v.getInt16(16, true) / 1000 : 0,
+  };
+}
+
+// ---- settings form ------------------------------------------------------
+function buildForm() {
+  const f = $('form');
+  for (const [key, label, unit] of FIELDS) {
+    f.insertAdjacentHTML('beforeend',
+      `<label for="f-${key}">${label} <span class="unit">${unit}</span></label><input type="number" id="f-${key}">`);
+  }
+  for (const [key, label] of CHECKS) {
+    f.insertAdjacentHTML('beforeend', `<label for="f-${key}">${label}</label><input type="checkbox" id="f-${key}">`);
+  }
+  f.insertAdjacentHTML('beforeend', `
+    <label for="f-rotation">Matrix rotation</label>
+    <select id="f-rotation"><option value="0">0°</option><option value="1">90°</option><option value="2">180°</option><option value="3">270°</option></select>`);
+}
+
+function fillForm(s) {
+  for (const [key] of FIELDS) $('f-' + key).value = s[key];
+  for (const [key] of CHECKS) $('f-' + key).checked = s[key];
+  $('f-rotation').value = String(s.rotation);
+}
+
+function readForm() {
+  const s = {};
+  for (const [key] of FIELDS) s[key] = Number($('f-' + key).value);
+  for (const [key] of CHECKS) s[key] = $('f-' + key).checked;
+  s.rotation = Number($('f-rotation').value);
+  return s;
+}
+
+async function saveForm() {
+  const next = readForm(), changed = {};
+  for (const key in next) if (next[key] !== cfg[key]) changed[key] = next[key];
+  if (!Object.keys(changed).length) return toast('Nothing changed');
+  try {
+    await write(chSet, JSON.stringify(changed));
+    await readSettings();
+    toast('Saved');
+  } catch (e) {
+    fillForm(cfg);
+    toast('The helmet refused those values. The "goes off" level must be below "comes on", and "fastest blinking" above it.');
+  }
+}
+
+// ---- live status ----------------------------------------------------------
+function leanText(deg) {
+  const a = Math.round(Math.abs(deg));
+  return a < 1 ? 'upright' : `${a}° ${deg > 0 ? 'left' : 'right'}`;
+}
+
+function sideText(g) {
+  return Math.abs(g) < 0.02 ? '0.00 g' : `${Math.abs(g).toFixed(2)} g ${g > 0 ? 'left' : 'right'}`;
+}
+
+function showTurn(turn) {
+  document.querySelectorAll('[data-turn]').forEach(b => b.classList.toggle('sel', b.dataset.turn === turn));
+}
+
+function showTestBrake(mg) {
+  if (!cfg) return;
+  $('b-gentle').classList.toggle('sel', mg === cfg.brake_on_mg);
+  $('b-hard').classList.toggle('sel', mg === cfg.brake_hard_mg);
+}
+
+let pressedAt = 0;  // a tap shows at once; the helmet's status takes over shortly after
+
+function render(s) {
+  last = s;
+  const hard = cfg && s.brake_g * 1000 >= (cfg.brake_on_mg + cfg.brake_hard_mg) / 2;
+  $('lamp').classList.toggle('on', s.brake || s.forced > 0);
+  $('state').textContent = !s.imu ? 'Motion sensor not working'
+    : s.brake ? `Braking ${hard ? 'hard' : 'gently'} (${s.brake_g.toFixed(2)} g)`
+    : s.forced > 0 ? 'Test brake' : s.level ? 'Not braking' : 'Paused: LEDs point up or down';
+  $('nums').textContent = `braking ${s.decel.toFixed(2)} g · sideways ${sideText(s.lat)} · turning ${Math.round(s.yaw)}°/s · lean ${leanText(s.lean)}`;
+
+  $('ind').textContent = s.turn !== 'off' ? `Indicator: ${s.turn} (by hand)`
+    : s.auto !== 'off' ? `Indicator: ${s.auto} (cornering)`
+    : s.parked ? 'Indicator: off (lying still, arrows paused)' : 'Indicator: off';
+  if (Date.now() - pressedAt > 400) {
+    showTurn(s.turn);
+    showTestBrake(s.forced);
+  }
+  $('b-orient').classList.toggle('sel', s.orient);
+
+  const recording = s.rec !== 255;
+  $('r-bar').style.width = (recording ? s.rec : 0) + '%';
+  $('r-start').disabled = recording;
+  $('r-note').textContent = recording ? 'Recording… the matrix fills blue.'
+    : s.rec_s ? `${s.rec_s} s recorded and kept on the helmet. Download it at home from the WiFi page; it is lost if the helmet is switched off.`
+    : 'A detailed recording is for tuning: every sensor reading, 100 times a second. It stays on the helmet until you download it at home over WiFi.';
+}
+
+// ---- rides ----------------------------------------------------------------
+function duration(s) {
+  const m = Math.round(s / 60);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+}
+
+function rideLine(r, when) {
+  return `<div class="ride"><div><b>${when}</b><br>${duration(r.duration_s)}</div>
+    <span>${r.brakes} brakes, ${r.hard_brakes} hard<br>strongest ${r.peak_g.toFixed(2)} g · ${r.left_turns + r.right_turns} turns</span></div>`;
+}
+
+function renderRides() {
+  const list = helmet.rides.slice().reverse();
+  $('rides').innerHTML = list.length ? list.map(r => rideLine(r,
+      r.open ? 'Current ride' : r.ended ? new Date(r.ended * 1000).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'Date unknown')).join('')
+    : '<p class="note" style="margin:0">No rides stored on the helmet yet.</p>';
+}
+
+function showTotals(rides) {
+  const t = rideTotals(rides);
+  const hours = t.seconds / 3600;
+  $('totals').innerHTML = t.rides ? `<b>In the cloud:</b> ${t.rides} rides · ${duration(t.seconds)} riding · ${t.brakes} brakes,
+    ${t.hard} hard${hours > 0.05 ? ` (${(t.hard / hours).toFixed(1)} hard per hour)` : ''} · strongest ${t.peak_g.toFixed(2)} g` : 'No rides in the cloud yet.';
+}
+
+const DEFAULT_REPO = 'joelvarun/helmet-rides';
+
+function cloudConfig() {
+  let repo = '', token = '';
+  try { repo = localStorage.getItem('gh_repo') || ''; token = localStorage.getItem('gh_token') || ''; } catch (e) {}
+  return { repo: repo || DEFAULT_REPO, token };
+}
+
+function needSetup() {
+  const { repo, token } = cloudConfig();
+  if (repo && token) return false;
+  $('setup').open = true;
+  toast('Fill in Cloud setup first');
+  return true;
+}
+
+async function sync() {
+  if (needSetup()) return;
+  const { repo, token } = cloudConfig();
+  $('sync').disabled = true;
+  try {
+    $('sync-note').textContent = 'Reading rides from the helmet…';
+    await readRides();
+    const fresh = helmet.rides.filter(r => !r.open).map(r => cloudRide(r, helmet.serial, Date.now()));
+    $('sync-note').textContent = 'Talking to GitHub…';
+    const cloud = await cloudLoad(repo, token);
+    const merged = mergeRides(cloud.rides, fresh);
+    if (merged.added) {
+      await cloudSave(repo, token, merged.rides, cloud.sha, `Add ${merged.added} ride${merged.added > 1 ? 's' : ''}`);
+    }
+    showTotals(merged.rides);
+    $('sync-note').textContent = merged.added ? `Synced: ${merged.added} new ride${merged.added > 1 ? 's' : ''} added to ${repo}.`
+      : fresh.length ? 'Already up to date: every finished ride is in the cloud.' : 'No finished rides on the helmet to sync yet.';
+  } catch (e) {
+    $('sync-note').textContent = 'Sync failed: ' + e.message;
+  }
+  $('sync').disabled = !(device && device.gatt.connected);
+}
+
+async function history() {
+  if (needSetup()) return;
+  const { repo, token } = cloudConfig();
+  try {
+    showTotals((await cloudLoad(repo, token)).rides);
+  } catch (e) {
+    $('totals').textContent = 'Could not load: ' + e.message;
+  }
+}
+
+// ---- wiring -------------------------------------------------------------
+function testBrake(key) {
+  if (!cfg) return;
+  const mg = last && last.forced === cfg[key] ? 0 : cfg[key];
+  pressedAt = Date.now();
+  showTestBrake(mg);
+  cmd('brake=' + mg);
+}
+
+document.querySelectorAll('[data-turn]').forEach(b => b.onclick = () => {
+  pressedAt = Date.now();
+  showTurn(b.dataset.turn);
+  cmd(b.dataset.turn);
+});
+$('b-gentle').onclick = () => testBrake('brake_on_mg');
+$('b-hard').onclick = () => testBrake('brake_hard_mg');
+$('b-self').onclick = () => cmd('selftest');
+$('b-orient').onclick = () => cmd('orient=' + (last && last.orient ? 0 : 1));
+$('r-start').onclick = () => cmd('record=' + $('r-secs').value);
+$('s-save').onclick = saveForm;
+$('connect').onclick = connect;
+$('sync').onclick = sync;
+$('history').onclick = history;
+$('gh-save').onclick = () => {
+  try {
+    localStorage.setItem('gh_repo', $('gh-repo').value.trim());
+    if ($('gh-token').value.trim()) localStorage.setItem('gh_token', $('gh-token').value.trim());
+    $('gh-token').value = '';
+    toast('Saved on this phone');
+  } catch (e) {
+    toast('This browser will not store it: ' + e.message);
+  }
+};
+$('gh-forget').onclick = () => {
+  try { localStorage.removeItem('gh_token'); } catch (e) {}
+  toast('Token forgotten');
+};
+
+buildForm();
+$('gh-repo').value = cloudConfig().repo;
+if (!navigator.bluetooth) {
+  $('connect').disabled = true;
+  $('help').innerHTML = 'This browser cannot use Bluetooth from a web page. On an iPhone open this page in the '
+    + '<b>Bluefy</b> app; on Android use <b>Chrome</b>. The address must start with <b>https://</b>.';
+}
+</script>
+</body>
+</html>
